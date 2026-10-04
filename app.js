@@ -7,12 +7,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyApTllG_8Gazh0rWB8m3NYqHzlwxnLPow",
+  apiKey: "AIzaSyApTllgL_8Gazh0rWB8m3NYqHzlwxnLPow",
   authDomain: "algarve-70138.firebaseapp.com",
   projectId: "algarve-70138",
   storageBucket: "algarve-70138.firebasestorage.app",
   messagingSenderId: "970057765652",
-  appId: "1:970057765652:web:ca1fa3987ecfe581a1a801"
+  appId: "1:970057765652:web:a963c6955ec1d728a1a801"
 };
 
 const PEOPLE = ["Carol","Graciela","Yanet"];
