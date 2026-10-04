@@ -66,10 +66,22 @@ async function login(){
   try{
     await signInWithEmailAndPassword(auth,email,password);
   }catch(e){
-    console.error(e);
+    console.error("ERROR FIREBASE LOGIN:", e);
+
+    const mensajes = {
+      "auth/invalid-credential": "Correo o contraseña incorrectos.",
+      "auth/invalid-login-credentials": "Correo o contraseña incorrectos.",
+      "auth/user-not-found": "El usuario no existe en Firebase.",
+      "auth/wrong-password": "La contraseña es incorrecta.",
+      "auth/invalid-email": "El correo electrónico no es válido.",
+      "auth/too-many-requests": "Demasiados intentos. Espera unos minutos.",
+      "auth/network-request-failed": "Error de conexión con Firebase.",
+      "auth/api-key-not-valid": "La clave de Firebase no es válida.",
+      "auth/operation-not-allowed": "El acceso por correo y contraseña no está habilitado en Firebase."
+    };
+
     document.getElementById("loginError").textContent =
-      e.code==="auth/invalid-credential" ? "Correo o contraseña incorrectos." :
-      "No se ha podido iniciar sesión. Comprueba los datos.";
+      mensajes[e.code] || `Error Firebase: ${e.code || "desconocido"}`;
   }finally{
     button.disabled = false;
     button.textContent = "Entrar";
