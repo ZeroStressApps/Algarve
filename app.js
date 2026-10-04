@@ -31,6 +31,8 @@ let db = null;
 let auth = null;
 let currentUser = null;
 let unsubscribe = null;
+let unsubscribePreparativos = null;
+let prepSaveTimer = null;
 
 function loadLocal(){
   try{
@@ -471,8 +473,55 @@ document.getElementById("addIndividualExpense").onclick=async()=>{
   document.getElementById("individualAmount").value="";
 };
 
-document.getElementById("preparativosArea").value=state.preparativos;
-document.getElementById("preparativosArea").addEventListener("input",e=>{state.preparativos=e.target.value;saveLocal()});
+async function loadMyPreparativos(){
+  const area=document.getElementById("preparativosArea");
+  if(!area || !db || !currentUser) return;
+
+  if(unsubscribePreparativos){
+    unsubscribePreparativos();
+    unsubscribePreparativos=null;
+  }
+
+  try{
+    const ref=doc(db,"preparativos",currentUser.uid);
+    unsubscribePreparativos=onSnapshot(ref,snap=>{
+      const text=snap.exists() ? String(snap.data().text || "") : "";
+      area.value=text;
+      state.preparativos=text;
+      saveLocal();
+    },err=>{
+      console.error("ERROR SINCRONIZANDO PREPARATIVOS:",err);
+    });
+  }catch(e){
+    console.error("ERROR CARGANDO PREPARATIVOS:",e);
+  }
+}
+
+function setupPreparativos(){
+  const area=document.getElementById("preparativosArea");
+  if(!area || area.dataset.ready) return;
+  area.dataset.ready="1";
+  area.addEventListener("input",e=>{
+    state.preparativos=e.target.value;
+    saveLocal();
+    clearTimeout(prepSaveTimer);
+    prepSaveTimer=setTimeout(async()=>{
+      if(!db || !currentUser) return;
+      try{
+        await setDoc(doc(db,"preparativos",currentUser.uid),{
+          text:e.target.value,
+          updatedAt:serverTimestamp(),
+          updatedBy:currentUser.email
+        },{merge:true});
+      }catch(err){
+        console.error("ERROR GUARDANDO PREPARATIVOS:",err);
+        alert("No se han podido guardar tus preparativos.");
+      }
+    },500);
+  });
+}
+
+setupPreparativos();
 
 function countdown(){
   const target=new Date("2026-10-09T08:00:00+02:00").getTime();
@@ -490,19 +539,27 @@ async function initFirebase(){
     db=getFirestore(app);
     auth=getAuth(app);
 
-    onAuthStateChanged(auth,user=>{
+    onAuthStateChanged(auth,async user=>{
       if(!user){
         if(unsubscribe){unsubscribe();unsubscribe=null}
+        if(unsubscribePreparativos){unsubscribePreparativos();unsubscribePreparativos=null}
         state.group=[];
         state.individual=[];
+        state.preparativos="";
+        const prepArea=document.getElementById("preparativosArea");
+        if(prepArea) prepArea.value="";
         renderExpenses();
         showLogin();
         return;
       }
       // Nunca reutilizar en pantalla los gastos individuales del usuario anterior.
       state.individual=[];
+      state.preparativos="";
+      const prepArea=document.getElementById("preparativosArea");
+      if(prepArea) prepArea.value="";
       showApp(user);
       renderExpenses();
+      await loadMyPreparativos();
       status.textContent="🟢 Sincronización Firebase activa";
       if(unsubscribe) unsubscribe();
 
