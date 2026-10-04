@@ -1,9 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
-  getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp
+  getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy,
+  serverTimestamp, getDoc, setDoc
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
+  updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
 const FIREBASE_CONFIG = {
@@ -41,11 +43,198 @@ function saveLocal(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); }
 const money = n => `${Number(n||0).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})} €`;
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 
+const DEFAULT_PHOTO = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+    <circle cx="60" cy="60" r="60" fill="#e7f4f3"/>
+    <circle cx="60" cy="46" r="22" fill="#2aa9a1"/>
+    <path d="M22 108c5-25 21-38 38-38s33 13 38 38" fill="#2aa9a1"/>
+  </svg>`
+);
+
+const profileCache = {};
+
+function personForEmail(email){
+  const map = {
+    "yanet.martinez0908@gmail.com":"Yanet",
+    "carosanchezf2@gmail.com":"Carol",
+    "ggagomunoz@gmail.com":"Graciela"
+  };
+  return map[String(email||"").toLowerCase()] || String(email||"").split("@")[0];
+}
+
+async function loadMyProfile(){
+  if(!db || !currentUser) return;
+  try{
+    const snap = await getDoc(doc(db,"profiles",currentUser.uid));
+    const data = snap.exists() ? snap.data() : {};
+    profileCache[currentUser.uid] = {
+      photo:data.photo || "",
+      email:currentUser.email
+    };
+    refreshProfileUI();
+  }catch(e){
+    console.error("ERROR CARGANDO PERFIL:",e);
+  }
+}
+
+async function saveMyProfilePhoto(photo){
+  if(!db || !currentUser) return;
+  await setDoc(doc(db,"profiles",currentUser.uid),{
+    photo,
+    email:currentUser.email,
+    updatedAt:serverTimestamp()
+  },{merge:true});
+  profileCache[currentUser.uid] = {photo,email:currentUser.email};
+}
+
+function getProfilePhoto(uid){
+  return profileCache[uid]?.photo || DEFAULT_PHOTO;
+}
+
+function ensureProfileUI(){
+  const shell = document.getElementById("appShell");
+  if(!shell || document.getElementById("profilePanel")) return;
+
+  const panel = document.createElement("div");
+  panel.id = "profilePanel";
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 18px;padding:12px;border:1px solid #d9ecea;border-radius:14px;background:#fff;">
+      <img id="profilePhoto" src="${DEFAULT_PHOTO}" alt="Foto de perfil"
+           style="width:58px;height:58px;border-radius:50%;object-fit:cover;border:2px solid #2aa9a1;">
+      <div style="flex:1;min-width:180px;">
+        <strong id="profileName"></strong>
+        <div class="muted" id="profileEmail"></div>
+      </div>
+      <label for="profilePhotoInput" style="cursor:pointer;padding:9px 12px;border-radius:10px;background:#2aa9a1;color:#fff;font-weight:700;">
+        Cambiar foto
+      </label>
+      <input id="profilePhotoInput" type="file" accept="image/*" hidden>
+      <button id="changePasswordButton" type="button"
+              style="padding:9px 12px;border-radius:10px;border:1px solid #2aa9a1;background:#fff;color:#167c76;font-weight:700;">
+        Cambiar contraseña
+      </button>
+    </div>
+  `;
+  shell.prepend(panel);
+
+  document.getElementById("profilePhotoInput").addEventListener("change",handlePhotoChange);
+  document.getElementById("changePasswordButton").addEventListener("click",changeMyPassword);
+}
+
+function refreshProfileUI(){
+  if(!currentUser) return;
+  ensureProfileUI();
+
+  const img = document.getElementById("profilePhoto");
+  const name = document.getElementById("profileName");
+  const email = document.getElementById("profileEmail");
+
+  if(img) img.src = getProfilePhoto(currentUser.uid);
+  if(name) name.textContent = personForEmail(currentUser.email);
+  if(email) email.textContent = currentUser.email;
+}
+
+async function handlePhotoChange(e){
+  const file = e.target.files?.[0];
+  if(!file || !currentUser) return;
+
+  if(!file.type.startsWith("image/")){
+    alert("Selecciona una imagen.");
+    e.target.value = "";
+    return;
+  }
+
+  if(file.size > 1500000){
+    alert("La foto es demasiado grande. Elige una imagen de menos de 1,5 MB.");
+    e.target.value = "";
+    return;
+  }
+
+  try{
+    const photo = await new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=>resolve(String(reader.result));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    await saveMyProfilePhoto(photo);
+    refreshProfileUI();
+    renderExpenses();
+    alert("Foto de perfil actualizada.");
+  }catch(err){
+    console.error("ERROR GUARDANDO FOTO:",err);
+    alert("No se ha podido guardar la foto.");
+  }finally{
+    e.target.value = "";
+  }
+}
+
+async function changeMyPassword(){
+  if(!currentUser) return;
+
+  const currentPassword = prompt("Escribe tu contraseña actual:");
+  if(currentPassword === null) return;
+
+  const newPassword = prompt("Escribe la nueva contraseña (mínimo 6 caracteres):");
+  if(newPassword === null) return;
+
+  if(newPassword.length < 6){
+    alert("La nueva contraseña debe tener al menos 6 caracteres.");
+    return;
+  }
+
+  try{
+    const credential = EmailAuthProvider.credential(currentUser.email,currentPassword);
+    await reauthenticateWithCredential(currentUser,credential);
+    await updatePassword(currentUser,newPassword);
+    alert("Contraseña cambiada correctamente.");
+  }catch(e){
+    console.error("ERROR CAMBIANDO CONTRASEÑA:",e);
+    const mensajes = {
+      "auth/invalid-credential":"La contraseña actual no es correcta.",
+      "auth/wrong-password":"La contraseña actual no es correcta.",
+      "auth/weak-password":"La nueva contraseña es demasiado débil.",
+      "auth/requires-recent-login":"Por seguridad, vuelve a iniciar sesión y después cambia la contraseña."
+    };
+    alert(mensajes[e.code] || `No se ha podido cambiar la contraseña: ${e.code || "error desconocido"}`);
+  }
+}
+
+function ensurePasswordVisibilityUI(){
+  const input = document.getElementById("loginPassword");
+  if(!input || document.getElementById("toggleLoginPassword")) return;
+
+  const button = document.createElement("button");
+  button.id = "toggleLoginPassword";
+  button.type = "button";
+  button.textContent = "👁️";
+  button.title = "Mostrar contraseña";
+  button.setAttribute("aria-label","Mostrar u ocultar contraseña");
+  button.style.cssText = "position:absolute;right:10px;top:50%;transform:translateY(-50%);border:0;background:transparent;cursor:pointer;font-size:18px;padding:4px;";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "position:relative;";
+  input.parentNode.insertBefore(wrapper,input);
+  wrapper.appendChild(input);
+  wrapper.appendChild(button);
+
+  button.onclick = ()=>{
+    const visible = input.type === "text";
+    input.type = visible ? "password" : "text";
+    button.textContent = visible ? "👁️" : "🙈";
+    button.title = visible ? "Mostrar contraseña" : "Ocultar contraseña";
+  };
+}
+
+
 function showApp(user){
   currentUser = user;
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("appShell").classList.remove("hidden");
   document.getElementById("loggedUser").textContent = user.email;
+  ensureProfileUI();
+  loadMyProfile();
 }
 function showLogin(message=""){
   currentUser = null;
@@ -119,14 +308,21 @@ function renderExpenses(){
   state.individual.forEach(x=>totals[x.person]+=Number(x.amount||0));
   state.group.forEach(x=>totals[x.payer]+=Number(x.amount||0));
 
-  document.getElementById("individualSummary").innerHTML=PEOPLE.map(p=>`
+  document.getElementById("individualSummary").innerHTML=PEOPLE.map(p=>{
+    const uid = Object.keys(profileCache).find(id=>personForEmail(profileCache[id]?.email)===p);
+    const photo = uid ? getProfilePhoto(uid) : DEFAULT_PHOTO;
+    return `
     <div class="person-card">
-      <div>${p}</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <img src="${photo}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">
+        <span>${p}</span>
+      </div>
       <strong>${money(totals[p])}</strong>
       <div class="muted">Gastos personales: ${money(state.individual.filter(x=>x.person===p).reduce((a,x)=>a+Number(x.amount||0),0))}</div>
       <div class="muted">Pagado en grupales: ${money(state.group.filter(x=>x.payer===p).reduce((a,x)=>a+Number(x.amount||0),0))}</div>
       <div class="person-total">Total pagado: ${money(totals[p])}</div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 
   const groupTotal=state.group.reduce((a,x)=>a+Number(x.amount||0),0);
   document.getElementById("groupTotal").textContent=money(groupTotal);
@@ -272,6 +468,7 @@ async function initFirebase(){
   }
 }
 
+ensurePasswordVisibilityUI();
 setupTabs();
 renderDays();
 renderSelects();
