@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
-  getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy,
+  getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, where,
   serverTimestamp, getDoc, setDoc
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import {
@@ -233,6 +233,7 @@ function showApp(user){
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("appShell").classList.remove("hidden");
   document.getElementById("loggedUser").textContent = user.email;
+  setMyIndividualPerson();
   ensureProfileUI();
   loadMyProfile();
 }
@@ -298,31 +299,49 @@ function renderDays(){
 }
 
 function renderSelects(){
-  ["groupPayer","individualPerson"].forEach(id=>{
-    document.getElementById(id).innerHTML=PEOPLE.map(p=>`<option>${p}</option>`).join("");
-  });
+  document.getElementById("groupPayer").innerHTML=PEOPLE.map(p=>`<option>${p}</option>`).join("");
+  document.getElementById("individualPerson").innerHTML=PEOPLE.map(p=>`<option>${p}</option>`).join("");
+}
+
+function setMyIndividualPerson(){
+  const select=document.getElementById("individualPerson");
+  if(!select || !currentUser) return;
+  const me=personForEmail(currentUser.email);
+  select.value=me;
+  select.disabled=true;
 }
 
 function renderExpenses(){
-  const totals=Object.fromEntries(PEOPLE.map(p=>[p,0]));
-  state.individual.forEach(x=>totals[x.person]+=Number(x.amount||0));
-  state.group.forEach(x=>totals[x.payer]+=Number(x.amount||0));
+  // Los gastos individuales son PRIVADOS: cada usuaria solo ve los suyos.
+  // Los gastos grupales sí son visibles para todas.
+  const myEmail = String(currentUser?.email || "").toLowerCase();
+  const myPerson = personForEmail(myEmail);
+  const myIndividual = state.individual.filter(x =>
+    String(x.createdBy || "").toLowerCase() === myEmail
+  );
 
-  document.getElementById("individualSummary").innerHTML=PEOPLE.map(p=>{
-    const uid = Object.keys(profileCache).find(id=>personForEmail(profileCache[id]?.email)===p);
-    const photo = uid ? getProfilePhoto(uid) : DEFAULT_PHOTO;
-    return `
-    <div class="person-card">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <img src="${photo}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">
-        <span>${p}</span>
-      </div>
-      <strong>${money(totals[p])}</strong>
-      <div class="muted">Gastos personales: ${money(state.individual.filter(x=>x.person===p).reduce((a,x)=>a+Number(x.amount||0),0))}</div>
-      <div class="muted">Pagado en grupales: ${money(state.group.filter(x=>x.payer===p).reduce((a,x)=>a+Number(x.amount||0),0))}</div>
-      <div class="person-total">Total pagado: ${money(totals[p])}</div>
-    </div>`;
-  }).join("");
+  const totals=Object.fromEntries(PEOPLE.map(p=>[p,0]));
+  state.group.forEach(x=>totals[x.payer]+=Number(x.amount||0));
+  myIndividual.forEach(x=>totals[myPerson]+=Number(x.amount||0));
+
+  const myPersonalTotal = myIndividual.reduce((a,x)=>a+Number(x.amount||0),0);
+  const myGroupPaid = state.group.filter(x=>x.payer===myPerson)
+    .reduce((a,x)=>a+Number(x.amount||0),0);
+  const myTotal = myPersonalTotal + myGroupPaid;
+
+  document.getElementById("individualSummary").innerHTML = currentUser
+    ? `
+      <div class="person-card">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <img src="${getProfilePhoto(currentUser.uid)}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">
+          <span>${esc(myPerson)}</span>
+        </div>
+        <strong>${money(myTotal)}</strong>
+        <div class="muted">Mis gastos personales: ${money(myPersonalTotal)}</div>
+        <div class="muted">Pagado por mí en grupales: ${money(myGroupPaid)}</div>
+        <div class="person-total">Total pagado por mí: ${money(myTotal)}</div>
+      </div>`
+    : `<p class="muted">Inicia sesión para ver tus gastos.</p>`;
 
   const groupTotal=state.group.reduce((a,x)=>a+Number(x.amount||0),0);
   document.getElementById("groupTotal").textContent=money(groupTotal);
@@ -341,18 +360,16 @@ function renderExpenses(){
       </div>`).join("")
     : `<p class="muted">Todavía no hay gastos grupales.</p>`;
 
-  document.getElementById("individualExpenseList").innerHTML = state.individual.length
-    ? state.individual.map(x=>`
+  document.getElementById("individualExpenseList").innerHTML = myIndividual.length
+    ? myIndividual.map(x=>`
       <div class="expense-row">
         <div>
           <strong>${esc(x.concept)}</strong>
           <div class="muted">${money(x.amount)}</div>
         </div>
-        ${x.createdBy===currentUser?.email
-          ? `<button class="delete" data-type="individual" data-id="${x.id}">Eliminar</button>`
-          : ""}
+        <button class="delete" data-type="individual" data-id="${x.id}">Eliminar</button>
       </div>`).join("")
-    : `<p class="muted">Todavía no hay gastos individuales.</p>`;
+    : `<p class="muted">Todavía no tienes gastos individuales.</p>`;
 
   document.querySelectorAll(".delete").forEach(btn=>
     btn.onclick=()=>removeExpense(btn.dataset.type,btn.dataset.id)
@@ -376,6 +393,7 @@ function renderExpenses(){
 async function addExpense(type, item){
   if(!currentUser) return;
   const payload={...item,type,createdAt:serverTimestamp(),createdBy:currentUser.email};
+  if(type === "individual") payload.person = personForEmail(currentUser.email);
   try{
     await addDoc(collection(db,"expenses"),payload);
   }catch(e){
@@ -439,27 +457,60 @@ async function initFirebase(){
     onAuthStateChanged(auth,user=>{
       if(!user){
         if(unsubscribe){unsubscribe();unsubscribe=null}
+        state.group=[];
+        state.individual=[];
+        renderExpenses();
         showLogin();
         return;
       }
+      // Nunca reutilizar en pantalla los gastos individuales del usuario anterior.
+      state.individual=[];
       showApp(user);
+      renderExpenses();
       status.textContent="🟢 Sincronización Firebase activa";
-      const q=query(collection(db,"expenses"),orderBy("createdAt","asc"));
       if(unsubscribe) unsubscribe();
-      unsubscribe=onSnapshot(q,snap=>{
-        const group=[], individual=[];
-        snap.forEach(d=>{
-          const x={id:d.id,...d.data()};
-          (x.type==="group"?group:individual).push(x);
-        });
-        state.group=group;
-        state.individual=individual;
+
+      // Dos consultas separadas para que Firestore nunca entregue a una usuaria
+      // los gastos individuales de las demás.
+      const qGroup=query(collection(db,"expenses"),where("type","==","group"));
+      const qIndividual=query(
+        collection(db,"expenses"),
+        where("type","==","individual"),
+        where("createdBy","==",user.email)
+      );
+
+      let groupReady=false, individualReady=false;
+      let stopGroup=null, stopIndividual=null;
+      const refresh=()=>{
+        if(!groupReady || !individualReady) return;
+        state.group.sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
+        state.individual.sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
         saveLocal();
         renderExpenses();
+      };
+
+      stopGroup=onSnapshot(qGroup,snap=>{
+        state.group=snap.docs.map(d=>({id:d.id,...d.data()}));
+        groupReady=true;
+        refresh();
       },err=>{
         console.error(err);
-        status.textContent="🔴 Error al sincronizar gastos";
+        status.textContent="🔴 Error al sincronizar gastos grupales";
       });
+
+      stopIndividual=onSnapshot(qIndividual,snap=>{
+        state.individual=snap.docs.map(d=>({id:d.id,...d.data()}));
+        individualReady=true;
+        refresh();
+      },err=>{
+        console.error(err);
+        status.textContent="🔴 Error al sincronizar tus gastos individuales";
+      });
+
+      unsubscribe=()=>{
+        if(stopGroup) stopGroup();
+        if(stopIndividual) stopIndividual();
+      };
     });
   }catch(e){
     console.error(e);
