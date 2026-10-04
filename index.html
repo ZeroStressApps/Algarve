@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f07f5f">
+  <meta name="description" content="App de viaje Algarve · 9 al 12 de octubre de 2026">
+  <title>Algarve · 9–12 octubre 2026</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <div class="app">
+    <header class="hero">
+      <div class="hero-top">
+        <div>
+          <div class="eyebrow">VIAJE DE CHICAS</div>
+          <h1>ALGARVE 🇵🇹</h1>
+          <p>9–12 de octubre de 2026 · Madrid → Algarve</p>
+        </div>
+        <div class="countdown" id="countdown">Preparando el viaje…</div>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="preparativos">🧳 Preparativos</button>
+      <button class="tab" data-tab="plan">🗓️ Plan del viaje</button>
+      <button class="tab" data-tab="gastos">💸 Alojamiento y gastos</button>
+    </nav>
+
+    <main>
+      <section id="preparativos" class="section active">
+        <div class="card">
+          <h2>🧳 Preparativos</h2>
+          <p>Todo lo que no queréis olvidar antes de meteros en el coche y tirar hacia Portugal.</p>
+          <textarea id="preparativosArea" placeholder="Escribe aquí tus preparativos…"></textarea>
+          <small class="hint">Estos preparativos se guardan en este dispositivo.</small>
+        </div>
+
+        <div class="card">
+          <h2>🏡 Nuestro Airbnb</h2>
+          <p><strong>Casa LOOS Ferragudo by Rosado</strong></p>
+          <p>Ferragudo, Distrito de Faro, Portugal · 4 viajeros · 2 dormitorios · 3 camas.</p>
+          <a class="link-button" href="https://www.airbnb.es/rooms/1769519642417979158" target="_blank" rel="noopener">🏡 Ver alojamiento en Airbnb</a>
+        </div>
+
+        <div class="card">
+          <h2>⛵ Excursión</h2>
+          <p><strong>Explora cuevas y la costa</strong></p>
+          <p>Salida desde Doca de São Francisco, Portimão. Paseo de unos 90 minutos por la costa, con el fuerte de Santa Catarina y las cuevas de Benagil.</p>
+          <a class="link-button" href="https://es-l.airbnb.com/experiences/1492043" target="_blank" rel="noopener">⛵ Ver excursión en Airbnb</a>
+        </div>
+
+        <div class="card">
+          <h2>👯 Las viajeras</h2>
+          <div class="people">
+            <span>👩 Carol</span>
+            <span>👩 Graciela</span>
+            <span>👩 Yanet</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="plan" class="section">
+        <div class="card">
+          <h2>🗓️ Plan del viaje</h2>
+          <div class="day-buttons" id="dayButtons"></div>
+          <div id="dayContent"></div>
+        </div>
+      </section>
+
+      <section id="gastos" class="section">
+        <div class="card">
+          <h2>🏡 Alojamiento</h2>
+          <p><strong>Casa LOOS Ferragudo by Rosado</strong></p>
+          <p>Ferragudo · 9–12 octubre · Airbnb</p>
+          <a class="link-button" href="https://www.airbnb.es/rooms/1769519642417979158" target="_blank" rel="noopener">Abrir reserva</a>
+        </div>
+
+        <div class="card">
+          <h2>💸 Gastos individuales</h2>
+          <p class="muted">Cada gasto puede asignarse a una persona. El total se recalcula automáticamente.</p>
+          <div id="individualSummary" class="people-expenses"></div>
+        </div>
+
+        <div class="card">
+          <h2>🍷 Gastos grupales</h2>
+          <div class="expense-form">
+            <label>Concepto
+              <input id="groupConcept" type="text" placeholder="Gasolina, comida, parking…">
+            </label>
+            <label>Quién paga
+              <select id="groupPayer"></select>
+            </label>
+            <label>Importe
+              <input id="groupAmount" type="number" min="0" step="0.01" placeholder="0,00">
+            </label>
+            <button id="addGroupExpense" class="primary">Añadir gasto</button>
+          </div>
+          <div class="summary-grid">
+            <div><span>Total grupal</span><strong id="groupTotal">0,00 €</strong></div>
+            <div><span>Parte por persona</span><strong id="groupPerPerson">0,00 €</strong></div>
+          </div>
+          <div id="groupExpenseList"></div>
+        </div>
+
+        <div class="card">
+          <h2>➕ Añadir gasto individual</h2>
+          <div class="expense-form">
+            <label>Persona
+              <select id="individualPerson"></select>
+            </label>
+            <label>Concepto
+              <input id="individualConcept" type="text" placeholder="Compra, entrada, regalo…">
+            </label>
+            <label>Importe
+              <input id="individualAmount" type="number" min="0" step="0.01" placeholder="0,00">
+            </label>
+            <button id="addIndividualExpense" class="primary">Añadir gasto</button>
+          </div>
+          <div id="individualExpenseList"></div>
+        </div>
+
+        <div class="card settlement">
+          <h2>⚖️ Cómo queda la cuenta</h2>
+          <p class="muted">Los gastos grupales se reparten a partes iguales entre Carol, Graciela y Yanet. Los individuales se quedan en la persona correspondiente.</p>
+          <div id="settlement"></div>
+        </div>
+
+        <div class="sync-status" id="syncStatus">Modo local · pendiente de conectar Firestore</div>
+      </section>
+    </main>
+
+    <footer>ALGARVE · 9–12 OCTUBRE 2026 🇵🇹</footer>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
