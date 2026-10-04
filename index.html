@@ -3,14 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#f07f5f">
+  <meta name="theme-color" content="#28a9a0">
   <meta name="description" content="App de viaje Algarve · 9 al 12 de octubre de 2026">
   <title>Algarve · 9–12 octubre 2026</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <div class="app">
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <img src="icon-512.png" alt="Algarve" class="login-icon">
+      <div class="eyebrow login-eyebrow">VIAJE DE CHICAS</div>
+      <h1>Algarve</h1>
+      <p class="login-subtitle">9–12 de octubre de 2026</p>
+      <label>Correo electrónico
+        <input id="loginEmail" type="email" autocomplete="username" placeholder="Tu correo">
+      </label>
+      <label>Contraseña
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Tu contraseña">
+      </label>
+      <button id="loginButton" class="primary login-button">Entrar</button>
+      <div id="loginError" class="login-error"></div>
+    </div>
+  </div>
+
+  <div id="appShell" class="app hidden">
     <header class="hero">
       <div class="hero-top">
         <div>
@@ -20,6 +37,7 @@
         </div>
         <div class="countdown" id="countdown">Preparando el viaje…</div>
       </div>
+      <div class="session-bar">Sesión: <strong id="loggedUser"></strong> <button id="logoutButton">Salir</button></div>
     </header>
 
     <nav class="tabs">
@@ -127,7 +145,7 @@
           <div id="settlement"></div>
         </div>
 
-        <div class="sync-status" id="syncStatus">Modo local · pendiente de conectar Firestore</div>
+        <div class="sync-status" id="syncStatus">Conectando con Firebase…</div>
       </section>
     </main>
 

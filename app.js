@@ -2,12 +2,18 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/fireba
 import {
   getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
-/*
-  PRIMERA VERSIÓN
-  Cuando creemos el proyecto Firebase ALGARVE, sustituiremos este bloque por su configuración.
-*/
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyApTllG_8Gazh0rWB8m3NYqHzlwxnLPow",
+  authDomain: "algarve-70138.firebaseapp.com",
+  projectId: "algarve-70138",
+  storageBucket: "algarve-70138.firebasestorage.app",
+  messagingSenderId: "970057765652",
+  appId: "1:970057765652:web:ca1fa3987ecfe581a1a801"
+};
 
 const PEOPLE = ["Carol","Graciela","Yanet"];
 const STORAGE_KEY = "algarve-v1-data";
@@ -20,6 +26,8 @@ const days = [
 
 let state = loadLocal();
 let db = null;
+let auth = null;
+let currentUser = null;
 let unsubscribe = null;
 
 function loadLocal(){
@@ -32,6 +40,41 @@ function saveLocal(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); }
 
 const money = n => `${Number(n||0).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})} €`;
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+
+function showApp(user){
+  currentUser = user;
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("appShell").classList.remove("hidden");
+  document.getElementById("loggedUser").textContent = user.email;
+}
+function showLogin(message=""){
+  currentUser = null;
+  document.getElementById("appShell").classList.add("hidden");
+  document.getElementById("loginScreen").classList.remove("hidden");
+  document.getElementById("loginError").textContent = message;
+}
+async function login(){
+  const email = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const button = document.getElementById("loginButton");
+  if(!email || !password){
+    document.getElementById("loginError").textContent = "Introduce el correo y la contraseña.";
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Entrando…";
+  try{
+    await signInWithEmailAndPassword(auth,email,password);
+  }catch(e){
+    console.error(e);
+    document.getElementById("loginError").textContent =
+      e.code==="auth/invalid-credential" ? "Correo o contraseña incorrectos." :
+      "No se ha podido iniciar sesión. Comprueba los datos.";
+  }finally{
+    button.disabled = false;
+    button.textContent = "Entrar";
+  }
+}
 
 function setupTabs(){
   document.querySelectorAll(".tab").forEach(btn=>btn.onclick=()=>{
@@ -96,21 +139,29 @@ function renderExpenses(){
 }
 
 async function addExpense(type, item){
-  item.id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-  if(type==="group") state.group.push(item); else state.individual.push(item);
-  saveLocal(); renderExpenses();
-  if(db){
-    try{
-      await addDoc(collection(db,"expenses"),{...item,type,createdAt:serverTimestamp()});
-    }catch(e){console.error(e)}
+  if(!currentUser) return;
+  const payload={...item,type,createdAt:serverTimestamp(),createdBy:currentUser.email};
+  try{
+    await addDoc(collection(db,"expenses"),payload);
+  }catch(e){
+    console.error(e);
+    alert("No se ha podido guardar el gasto en Firebase.");
   }
 }
 
 async function removeExpense(type,id){
-  state[type]=state[type].filter(x=>x.id!==id);
-  saveLocal(); renderExpenses();
-  // In the first prototype deletions are local until Firebase is connected.
+  if(!currentUser || !id) return;
+  try{
+    await deleteDoc(doc(db,"expenses",id));
+  }catch(e){
+    console.error(e);
+    alert("No se ha podido eliminar el gasto.");
+  }
 }
+
+document.getElementById("loginButton").onclick=login;
+document.getElementById("loginPassword").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
+document.getElementById("logoutButton").onclick=()=>signOut(auth);
 
 document.getElementById("addGroupExpense").onclick=async()=>{
   const concept=document.getElementById("groupConcept").value.trim();
@@ -145,18 +196,47 @@ function countdown(){
 
 async function initFirebase(){
   const status=document.getElementById("syncStatus");
-  if(!FIREBASE_CONFIG){status.textContent="Modo local · Firebase se conectará al crear el proyecto ALGARVE";return}
   try{
     const app=initializeApp(FIREBASE_CONFIG);
     db=getFirestore(app);
-    status.textContent="🟢 Sincronización Firebase activa";
-    const q=query(collection(db,"expenses"),orderBy("createdAt","asc"));
-    unsubscribe=onSnapshot(q,snap=>{
-      const group=[], individual=[];
-      snap.forEach(d=>{const x={id:d.id,...d.data()};(x.type==="group"?group:individual).push(x)});
-      state.group=group; state.individual=individual; saveLocal(); renderExpenses();
+    auth=getAuth(app);
+
+    onAuthStateChanged(auth,user=>{
+      if(!user){
+        if(unsubscribe){unsubscribe();unsubscribe=null}
+        showLogin();
+        return;
+      }
+      showApp(user);
+      status.textContent="🟢 Sincronización Firebase activa";
+      const q=query(collection(db,"expenses"),orderBy("createdAt","asc"));
+      if(unsubscribe) unsubscribe();
+      unsubscribe=onSnapshot(q,snap=>{
+        const group=[], individual=[];
+        snap.forEach(d=>{
+          const x={id:d.id,...d.data()};
+          (x.type==="group"?group:individual).push(x);
+        });
+        state.group=group;
+        state.individual=individual;
+        saveLocal();
+        renderExpenses();
+      },err=>{
+        console.error(err);
+        status.textContent="🔴 Error al sincronizar gastos";
+      });
     });
-  }catch(e){console.error(e);status.textContent="Modo local · no se ha podido conectar con Firebase"}
+  }catch(e){
+    console.error(e);
+    status.textContent="🔴 No se ha podido conectar con Firebase";
+    showLogin("No se ha podido conectar con Firebase.");
+  }
 }
 
-setupTabs(); renderDays(); renderSelects(); renderExpenses(); countdown(); setInterval(countdown,60000); initFirebase();
+setupTabs();
+renderDays();
+renderSelects();
+renderExpenses();
+countdown();
+setInterval(countdown,60000);
+initFirebase();

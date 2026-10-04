@@ -3,7 +3,7 @@
   "short_name": "Algarve",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#fff7f1",
-  "theme_color": "#f07f5f",
+  "background_color": "#eefaf8",
+  "theme_color": "#28a9a0",
   "lang": "es"
 }
