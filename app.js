@@ -138,7 +138,7 @@ function countdown(){
   const target=new Date("2026-10-09T08:00:00+02:00").getTime();
   const diff=target-Date.now();
   const el=document.getElementById("countdown");
-  if(diff<=0){el.textContent="¡Ya estamos en el Algarve! 🇵🇹";return}
+  if(diff<=0){el.textContent="¡Ya estamos en el Algarve!";return}
   const d=Math.floor(diff/86400000), h=Math.floor(diff%86400000/3600000);
   el.textContent=`Faltan ${d} días y ${h} h`;
 }
