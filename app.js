@@ -133,20 +133,47 @@ function renderExpenses(){
   document.getElementById("groupPerPerson").textContent=money(groupTotal/PEOPLE.length);
 
   document.getElementById("groupExpenseList").innerHTML = state.group.length
-    ? state.group.map(x=>`<div class="expense-row"><div><strong>${esc(x.concept)}</strong><div class="muted">${esc(x.payer)} · ${money(x.amount)}</div></div><button class="delete" data-type="group" data-id="${x.id}">Eliminar</button></div>`).join("")
+    ? state.group.map(x=>`
+      <div class="expense-row">
+        <div>
+          <strong>${esc(x.concept)}</strong>
+          <div class="muted">${esc(x.payer)} · ${money(x.amount)}</div>
+        </div>
+        ${x.createdBy===currentUser?.email
+          ? `<button class="delete" data-type="group" data-id="${x.id}">Eliminar</button>`
+          : ""}
+      </div>`).join("")
     : `<p class="muted">Todavía no hay gastos grupales.</p>`;
 
   document.getElementById("individualExpenseList").innerHTML = state.individual.length
-    ? state.individual.map(x=>`<div class="expense-row"><div><strong>${esc(x.concept)}</strong><div class="muted">${esc(x.person)} · ${money(x.amount)}</div></div><button class="delete" data-type="individual" data-id="${x.id}">Eliminar</button></div>`).join("")
+    ? state.individual.map(x=>`
+      <div class="expense-row">
+        <div>
+          <strong>${esc(x.concept)}</strong>
+          <div class="muted">${money(x.amount)}</div>
+        </div>
+        ${x.createdBy===currentUser?.email
+          ? `<button class="delete" data-type="individual" data-id="${x.id}">Eliminar</button>`
+          : ""}
+      </div>`).join("")
     : `<p class="muted">Todavía no hay gastos individuales.</p>`;
 
-  document.querySelectorAll(".delete").forEach(btn=>btn.onclick=()=>removeExpense(btn.dataset.type,btn.dataset.id));
+  document.querySelectorAll(".delete").forEach(btn=>
+    btn.onclick=()=>removeExpense(btn.dataset.type,btn.dataset.id)
+  );
 
   const equalShare=groupTotal/PEOPLE.length;
+
   document.getElementById("settlement").innerHTML=PEOPLE.map(p=>{
     const paid=state.group.filter(x=>x.payer===p).reduce((a,x)=>a+Number(x.amount||0),0);
     const balance=paid-equalShare;
-    return `<div class="balance-row"><strong>${p}</strong><span class="${balance>=0?"positive":"negative"}">${balance>=0?"+":"−"}${money(Math.abs(balance))}</span></div>`;
+
+    return `<div class="balance-row">
+      <strong>${p}</strong>
+      <span class="${balance>=0?"positive":"negative"}">
+        ${balance>=0?"+":"−"}${money(Math.abs(balance))}
+      </span>
+    </div>`;
   }).join("");
 }
 
