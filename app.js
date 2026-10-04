@@ -377,10 +377,13 @@ function renderExpenses(){
 
   const equalShare=groupTotal/PEOPLE.length;
 
-  document.getElementById("settlement").innerHTML=PEOPLE.map(p=>{
+  const balances=Object.fromEntries(PEOPLE.map(p=>{
     const paid=state.group.filter(x=>x.payer===p).reduce((a,x)=>a+Number(x.amount||0),0);
-    const balance=paid-equalShare;
+    return [p, paid-equalShare];
+  }));
 
+  const balanceRows=PEOPLE.map(p=>{
+    const balance=balances[p];
     return `<div class="balance-row">
       <strong>${p}</strong>
       <span class="${balance>=0?"positive":"negative"}">
@@ -388,6 +391,39 @@ function renderExpenses(){
       </span>
     </div>`;
   }).join("");
+
+  // Calcula quién tiene que pagar a quién para saldar los gastos grupales.
+  // Se intenta hacer con el menor número de transferencias posible.
+  const creditors=PEOPLE
+    .map(p=>({person:p,amount:Math.max(0,balances[p])}))
+    .filter(x=>x.amount>0.005)
+    .sort((a,b)=>b.amount-a.amount);
+  const debtors=PEOPLE
+    .map(p=>({person:p,amount:Math.max(0,-balances[p])}))
+    .filter(x=>x.amount>0.005)
+    .sort((a,b)=>b.amount-a.amount);
+
+  const transfers=[];
+  let ci=0, di=0;
+  while(ci<creditors.length && di<debtors.length){
+    const amount=Math.min(creditors[ci].amount,debtors[di].amount);
+    if(amount>0.005){
+      transfers.push(`<div class="balance-row">
+        <strong>${esc(debtors[di].person)}</strong>
+        <span>debe <strong>${money(amount)}</strong> a <strong>${esc(creditors[ci].person)}</strong></span>
+      </div>`);
+    }
+    creditors[ci].amount-=amount;
+    debtors[di].amount-=amount;
+    if(creditors[ci].amount<=0.005) ci++;
+    if(debtors[di].amount<=0.005) di++;
+  }
+
+  const transfersHtml=transfers.length
+    ? `<div style="margin-top:14px;"><strong>Quién debe a quién</strong>${transfers.join("")}</div>`
+    : `<div class="muted" style="margin-top:14px;">No hay pagos pendientes. Estáis a mano.</div>`;
+
+  document.getElementById("settlement").innerHTML=balanceRows+transfersHtml;
 }
 
 async function addExpense(type, item){
