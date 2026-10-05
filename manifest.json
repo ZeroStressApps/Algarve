@@ -1,12 +1,20 @@
 {
-  "name": "Algarve · 9–12 octubre 2026",
+  "name": "Algarve · 9-12 octubre 2026",
   "short_name": "Algarve",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#eafaf8",
-  "theme_color": "#28aaa0",
+  "theme_color": "#28a9a9",
   "lang": "es",
+  "id": "./",
   "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "./icon-512.png",
       "sizes": "512x512",
