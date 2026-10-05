@@ -423,7 +423,7 @@ function renderExpenses(){
 
   const transfersHtml=transfers.length
     ? `<div style="margin-top:14px;"><strong>Quién debe a quién</strong>${transfers.join("")}</div>`
-    : `<div class="muted" style="margin-top:14px;">No hay pagos pendientes. Estáis a mano.</div>`;
+    : `<div class="muted" style="margin-top:14px;">No hay pagos pendientes. Estáis en paz.</div>`;
 
   document.getElementById("settlement").innerHTML=balanceRows+transfersHtml;
 }
